@@ -1,38 +1,37 @@
 import React, { useState, useRef } from 'react';
+import { interval } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 function Stopwatch() {
     const time = useRef(0);
-    const running = useRef(null);
+    const currentTimeSubscription = useRef(null);
     const [, setRenderCount] = useState(0);
 
-    const rerender = () => setRenderCount((prev) => prev + 1);
-
-    const setTime = (next) => (time.current = next);
-    const setRunning = (next) => (running.current = next);
+    const unsubscribeAndClear = () => {
+        currentTimeSubscription.current?.unsubscribe();
+        currentTimeSubscription.current = null;
+    }
 
     const setTimeAndRender = (next) => {
-        setTime(next);
-        rerender();
+        time.current = next;
+        setRenderCount((prev) => prev + 1);
     };
 
     const start = () => {
         const start = new Date() - time.current;
 
-        setRunning(
-            setInterval(() => {
-                setTimeAndRender(new Date() - start);
-            }, 10)
-        );
+        currentTimeSubscription.current = interval(10)
+            .pipe(map(_ => new Date() - start))
+            .subscribe(setTimeAndRender);
     };
 
     const stop = () => {
-        clearInterval(running.current);
         setTimeAndRender(0);
-        setRunning(null);
+        unsubscribeAndClear();
     };
 
     const toggleStartStop = () => {
-        if (running.current) {
+        if (currentTimeSubscription.current) {
             stop();
         } else {
             start();
@@ -40,10 +39,11 @@ function Stopwatch() {
     };
 
     const wait = (e) => {
-        if (e.detail === 2) {
-            clearInterval(running.current);
+        const isDoubleClick = e => e.detail === 2;
+
+        if (isDoubleClick(e)) {
             setTimeAndRender(time.current);
-            setRunning(null);
+            unsubscribeAndClear();
         }
     };
 
@@ -61,7 +61,7 @@ function Stopwatch() {
             <h2>{formatTime(time.current)}</h2>
 
             <button onClick={toggleStartStop}>
-                {running.current ? "Stop" : time.current ? "Resume" : "Start"}
+                {currentTimeSubscription.current ? "Stop" : time.current ? "Resume" : "Start"}
             </button>
             {time.current ? <button onClick={wait}>Wait</button> : ""}
             {time.current ? <button onClick={reset}>Reset</button> : ""}
